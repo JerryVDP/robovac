@@ -42,6 +42,7 @@ from homeassistant.const import (
     CONF_NAME,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -69,6 +70,10 @@ ATTR_MODE = "mode"
 
 _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(seconds=REFRESH_RATE)
+
+# Signal fired when the vacuum entity reads a new cleaning type from DPS,
+# so the select entity can stay in sync without its own poll.
+CLEANING_TYPE_UPDATED_SIGNAL = "robovac_cleaning_type_updated_{}"
 UPDATE_RETRIES = 3
 
 # ⚡ Bolt optimization: Pre-calculate valid VacuumActivity values into a set
@@ -552,6 +557,7 @@ class RoboVacEntity(StateVacuumEntity):
         # Update common attributes for all models
         self._update_state_and_error()
         self._update_mode_and_fan_speed()
+        self._notify_cleaning_type()
 
         # Update model-specific attributes
         self._update_cleaning_stats()
@@ -708,6 +714,22 @@ class RoboVacEntity(StateVacuumEntity):
                 self._attr_fan_speed = "Boost IQ"
             elif self.fan_speed == "Quiet":
                 self._attr_fan_speed = "Pure"
+
+    def _notify_cleaning_type(self) -> None:
+        """Fire a dispatcher signal when DPS 154 (cleaning type) is present in the update."""
+        if self.tuyastatus is None or self.vacuum is None:
+            return
+        cleaning_type_dps = self.get_dps_code("CLEANING_TYPE")
+        raw_value = self.tuyastatus.get(cleaning_type_dps)
+        if raw_value is not None:
+            human = self.vacuum.getRoboVacHumanReadableValue(
+                RobovacCommand.CLEANING_TYPE, raw_value
+            )
+            async_dispatcher_send(
+                self.hass,
+                CLEANING_TYPE_UPDATED_SIGNAL.format(self.unique_id),
+                human,
+            )
 
     def _update_cleaning_stats(self) -> None:
         """Update cleaning statistics (area and time)."""
