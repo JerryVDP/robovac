@@ -149,7 +149,7 @@ class T2080(RobovacModelDetails):
             "code": 154,
             "values": {
                 "vacuum_only": "BgoECgIIAA==",
-                "mop_only": "BgoECgIIAQ==",
+                # "mop_only": "BgoECgIIAQ==",
                 "vacuum_and_mop": "BgoECgIIAg==",
             },
         },
