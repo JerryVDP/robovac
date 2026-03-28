@@ -50,10 +50,19 @@ class CleaningTypeSelectEntity(SelectEntity):
 
     Sends commands via the vacuum entity's existing RoboVac connection so no
     second TCP socket is opened to the device.
+
+    Display labels match HomeKit Matter Hub requirements for automatic detection.
     """
 
     _attr_has_entity_name = True
     _attr_should_poll = False
+
+    # HomeKit-compatible display labels (match Matter RVC Clean Mode cluster)
+    CLEANING_TYPE_LABELS = {
+        "vacuum_only": "Vacuum",
+        "mop_only": "Mop",
+        "vacuum_and_mop": "Vacuum and mop",
+    }
 
     def __init__(self, item: dict[str, Any]) -> None:
         self._device_id: str = item[CONF_ID]
@@ -82,8 +91,9 @@ class CleaningTypeSelectEntity(SelectEntity):
         cleaning_types = ve.vacuum.getCleaningTypes()
         if not cleaning_types:
             return False
-        self._attr_options = [ct.replace("_", " ").title() for ct in cleaning_types]
-        self._label_to_key = {ct.replace("_", " ").title(): ct for ct in cleaning_types}
+        # Use HomeKit-compatible labels
+        self._attr_options = [self.CLEANING_TYPE_LABELS.get(ct, ct) for ct in cleaning_types]
+        self._label_to_key = {self.CLEANING_TYPE_LABELS.get(ct, ct): ct for ct in cleaning_types}
         if self._attr_current_option is None:
             self._attr_current_option = self._attr_options[0]
         return True
@@ -102,7 +112,7 @@ class CleaningTypeSelectEntity(SelectEntity):
     def _handle_cleaning_type_update(self, cleaning_type: str) -> None:
         if not self._attr_options:
             self._build_options()
-        label = cleaning_type.replace("_", " ").title()
+        label = self.CLEANING_TYPE_LABELS.get(cleaning_type, cleaning_type)
         if label in self._attr_options and label != self._attr_current_option:
             self._attr_current_option = label
             self.async_write_ha_state()
