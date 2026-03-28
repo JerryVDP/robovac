@@ -24,7 +24,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import CONF_VACS, DOMAIN
 from .vacuums.base import RobovacCommand
 from .tuyalocalapi import TuyaException
-from .vacuum import CLEANING_TYPE_UPDATED_SIGNAL
+from .vacuum import CLEANING_TYPE_UPDATED_SIGNAL, MOP_INTENSITY_UPDATED_SIGNAL
 
 if TYPE_CHECKING:
     from .vacuum import RoboVacEntity
@@ -37,11 +37,11 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up cleaning-type select entities from a config entry."""
-    entities = [
-        CleaningTypeSelectEntity(item)
-        for item in config_entry.data[CONF_VACS].values()
-    ]
+    """Set up select entities from a config entry."""
+    entities = []
+    for item in config_entry.data[CONF_VACS].values():
+        entities.append(CleaningTypeSelectEntity(item))
+        entities.append(MopIntensitySelectEntity(item))
     async_add_entities(entities)
 
 
@@ -138,3 +138,84 @@ class CleaningTypeSelectEntity(SelectEntity):
             self.async_write_ha_state()
         except TuyaException as e:
             _LOGGER.error("Failed to set cleaning type: %s", e)
+
+
+class MopIntensitySelectEntity(SelectEntity):
+    """Select entity for vacuum mop intensity (low / middle / high).
+
+    Sends commands via the vacuum entity's existing RoboVac connection.
+    """
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+
+    def __init__(self, item: dict[str, Any]) -> None:
+        self._device_id: str = item[CONF_ID]
+        self._attr_unique_id = f"{item[CONF_ID]}_mop_intensity"
+        self._attr_name = "Mop Intensity"
+        self._attr_options: list[str] = []
+        self._attr_current_option: str | None = None
+
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, item[CONF_ID])},
+            name=item[CONF_NAME],
+            manufacturer="Eufy",
+            model=item[CONF_DESCRIPTION],
+            connections={(CONNECTION_NETWORK_MAC, item[CONF_MAC])},
+        )
+
+    def _get_vacuum_entity(self) -> "RoboVacEntity | None":
+        return self.hass.data.get(DOMAIN, {}).get(CONF_VACS, {}).get(self._device_id)
+
+    def _build_options(self) -> bool:
+        """Populate options from the vacuum model. Returns True if successful."""
+        ve = self._get_vacuum_entity()
+        if ve is None or ve.vacuum is None:
+            return False
+        mop_levels = ve.vacuum.getMopLevels()
+        if not mop_levels:
+            return False
+        # Capitalize for display (Low, Middle, High)
+        self._attr_options = [level.capitalize() for level in mop_levels]
+        if self._attr_current_option is None:
+            self._attr_current_option = self._attr_options[0]
+        return True
+
+    async def async_added_to_hass(self) -> None:
+        self._build_options()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                MOP_INTENSITY_UPDATED_SIGNAL.format(self._device_id),
+                self._handle_mop_intensity_update,
+            )
+        )
+
+    @callback
+    def _handle_mop_intensity_update(self, mop_level: str) -> None:
+        if not self._attr_options:
+            self._build_options()
+        label = mop_level.capitalize()
+        if label in self._attr_options and label != self._attr_current_option:
+            self._attr_current_option = label
+            self.async_write_ha_state()
+
+    async def async_select_option(self, option: str) -> None:
+        """Send the chosen mop intensity to the device."""
+        ve = self._get_vacuum_entity()
+        if ve is None or ve.vacuum is None:
+            _LOGGER.error("Cannot set mop intensity: vacuum entity not available")
+            return
+        if not self._attr_options:
+            self._build_options()
+        # Convert back to lowercase for DPS value
+        raw_key = option.lower()
+        dps_code = ve.get_dps_code("MOP_LEVEL")
+        command_value = ve.vacuum.getRoboVacCommandValue(RobovacCommand.MOP_LEVEL, raw_key)
+        _LOGGER.debug("Setting mop intensity %s → DPS %s = %s", raw_key, dps_code, command_value)
+        try:
+            await ve.vacuum.async_set({dps_code: command_value})
+            self._attr_current_option = option
+            self.async_write_ha_state()
+        except TuyaException as e:
+            _LOGGER.error("Failed to set mop intensity: %s", e)

@@ -123,6 +123,18 @@ class RoboVac(TuyaDevice):
             return []
         return list(values.keys())
 
+    def getMopLevels(self) -> list[str]:
+        """Return the list of available mop intensity levels for this model.
+
+        Returns:
+            list[str]: Mop intensity level names (e.g. ["low", "middle", "high"]),
+                       or an empty list if this model has no MOP_LEVEL command.
+        """
+        values = self._get_command_values(RobovacCommand.MOP_LEVEL)
+        if values is None:
+            return []
+        return list(values.keys())
+
     def _get_command_values(
         self, command_name: RobovacCommand
     ) -> dict[str, str] | None:

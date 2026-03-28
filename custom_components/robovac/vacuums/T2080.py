@@ -116,14 +116,13 @@ class T2080(RobovacModelDetails):
             },
         },
         RobovacCommand.MOP_LEVEL: {
-            # Based on debug logs from issue #105
+            # DPS 10 controls mop water intensity
             # Device uses these exact string values
             "code": 10,
             "values": {
                 "low": "low",
                 "middle": "middle",
-                "normal": "normal",
-                "strong": "strong"
+                "high": "high"
             },
         },
         RobovacCommand.BATTERY: {
@@ -150,6 +149,7 @@ class T2080(RobovacModelDetails):
             "code": 154,
             "values": {
                 "vacuum_only": "BgoECgIIAA==",
+                "mop_only": "BgoECgIIAQ==",
                 "vacuum_and_mop": "BgoECgIIAg==",
             },
         },

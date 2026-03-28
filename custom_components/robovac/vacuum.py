@@ -74,6 +74,7 @@ SCAN_INTERVAL = timedelta(seconds=REFRESH_RATE)
 # Signal fired when the vacuum entity reads a new cleaning type from DPS,
 # so the select entity can stay in sync without its own poll.
 CLEANING_TYPE_UPDATED_SIGNAL = "robovac_cleaning_type_updated_{}"
+MOP_INTENSITY_UPDATED_SIGNAL = "robovac_mop_intensity_updated_{}"
 UPDATE_RETRIES = 3
 
 # ⚡ Bolt optimization: Pre-calculate valid VacuumActivity values into a set
@@ -558,6 +559,7 @@ class RoboVacEntity(StateVacuumEntity):
         self._update_state_and_error()
         self._update_mode_and_fan_speed()
         self._notify_cleaning_type()
+        self._notify_mop_intensity()
 
         # Update model-specific attributes
         self._update_cleaning_stats()
@@ -728,6 +730,22 @@ class RoboVacEntity(StateVacuumEntity):
             async_dispatcher_send(
                 self.hass,
                 CLEANING_TYPE_UPDATED_SIGNAL.format(self.unique_id),
+                human,
+            )
+
+    def _notify_mop_intensity(self) -> None:
+        """Fire a dispatcher signal when DPS 10 (mop intensity) is present in the update."""
+        if self.tuyastatus is None or self.vacuum is None:
+            return
+        mop_level_dps = self.get_dps_code("MOP_LEVEL")
+        raw_value = self.tuyastatus.get(mop_level_dps)
+        if raw_value is not None:
+            human = self.vacuum.getRoboVacHumanReadableValue(
+                RobovacCommand.MOP_LEVEL, raw_value
+            )
+            async_dispatcher_send(
+                self.hass,
+                MOP_INTENSITY_UPDATED_SIGNAL.format(self.unique_id),
                 human,
             )
 
