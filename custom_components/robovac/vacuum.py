@@ -348,6 +348,10 @@ class RoboVacEntity(StateVacuumEntity):
             data[ATTR_CONSUMABLES] = self.consumables
         if self.mode:
             data[ATTR_MODE] = self.mode
+        if self.vacuum is not None:
+            cleaning_types = self.vacuum.getCleaningTypes()
+            if cleaning_types:
+                data["cleaning_type_list"] = cleaning_types
         return data
 
     def __init__(self, item: dict[str, Any]) -> None:
@@ -644,7 +648,8 @@ class RoboVacEntity(StateVacuumEntity):
         tuya_state = self.tuyastatus.get(self.get_dps_code("STATUS"))
         error_code = self.tuyastatus.get(self.get_dps_code("ERROR_CODE"))
 
-        # Update state attribute
+        # Update state attribute — only overwrite if this update includes a STATUS value,
+        # so partial pushes (e.g. battery-only) don't reset the displayed state to Unknown.
         if tuya_state is not None and self.vacuum is not None:
             self._attr_tuya_state = self.vacuum.getRoboVacHumanReadableValue(RobovacCommand.STATUS, tuya_state)
             _LOGGER.debug(
@@ -653,9 +658,12 @@ class RoboVacEntity(StateVacuumEntity):
                 self._attr_tuya_state
             )
         else:
-            self._attr_tuya_state = 0
+            _LOGGER.debug(
+                "STATUS not in this update, retaining last known state: %s",
+                self._attr_tuya_state
+            )
 
-        # Update error code attribute
+        # Update error code attribute — same: retain last known value if not in this update.
         if error_code is not None and self.vacuum is not None:
             self._attr_error_code = self.vacuum.getRoboVacHumanReadableValue(RobovacCommand.ERROR, error_code)
             _LOGGER.debug(
@@ -664,7 +672,10 @@ class RoboVacEntity(StateVacuumEntity):
                 self._attr_error_code
             )
         else:
-            self._attr_error_code = 0
+            _LOGGER.debug(
+                "ERROR_CODE not in this update, retaining last known error: %s",
+                self._attr_error_code
+            )
 
     def _update_mode_and_fan_speed(self) -> None:
         """Update the mode and fan speed attributes."""
@@ -921,6 +932,17 @@ class RoboVacEntity(StateVacuumEntity):
             new_value = not self._is_value_true(self.boost_iq)
             await self.vacuum.async_set({
                 self.get_dps_code("BOOST_IQ"): new_value
+            })
+        elif command == "setCleaningType" and params is not None and isinstance(params, dict):
+            cleaning_type = params.get("type", "")
+            if self.vacuum is None:
+                return
+            command_value = self.vacuum.getRoboVacCommandValue(
+                RobovacCommand.CLEANING_TYPE, cleaning_type
+            )
+            _LOGGER.debug("setCleaningType: %s -> %s", cleaning_type, command_value)
+            await self.vacuum.async_set({
+                self.get_dps_code("CLEANING_TYPE"): command_value
             })
         elif command in ("roomClean", "room_clean") and params is not None and isinstance(params, dict):
             room_ids = params.get("roomIds") or params.get("room_ids", [1])

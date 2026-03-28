@@ -36,6 +36,7 @@ class RobovacCommand(StrEnum):
     DO_NOT_DISTURB = "do_not_disturb"
     BOOST_IQ = "boost_iq"
     CONSUMABLES = "consumables"
+    CLEANING_TYPE = "cleaning_type"
 
 
 class TuyaCodes(StrEnum):

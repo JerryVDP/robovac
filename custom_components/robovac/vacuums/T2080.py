@@ -142,7 +142,17 @@ class T2080(RobovacModelDetails):
         RobovacCommand.CLEANING_AREA: {
             # Verified
             "code": 7,
-        }
+        },
+        RobovacCommand.CLEANING_TYPE: {
+            # DPS 154 = CLEANING_PARAMETERS: protobuf-encoded CleanParamRequest.
+            # Encoding: base64(varint(len) + CleanParamRequest{ clean_param: CleanParam{ clean_type: CleanType{ value: N } } })
+            # Values: 0=SWEEP_ONLY, 1=MOP_ONLY, 2=SWEEP_AND_MOP
+            "code": 154,
+            "values": {
+                "vacuum_only": "BgoECgIIAA==",
+                "vacuum_and_mop": "BgoECgIIAg==",
+            },
+        },
     }
     activity_mapping = {
         "Paused": VacuumActivity.PAUSED,

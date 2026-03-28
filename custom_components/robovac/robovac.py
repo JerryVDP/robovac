@@ -111,6 +111,18 @@ class RoboVac(TuyaDevice):
         """
         return self.model_details.activity_mapping
 
+    def getCleaningTypes(self) -> list[str]:
+        """Return the list of available cleaning types for this model.
+
+        Returns:
+            list[str]: Human-readable cleaning type names (e.g. ["vacuum_only", "vacuum_and_mop"]),
+                       or an empty list if this model has no CLEANING_TYPE command.
+        """
+        values = self._get_command_values(RobovacCommand.CLEANING_TYPE)
+        if values is None:
+            return []
+        return list(values.keys())
+
     def _get_command_values(
         self, command_name: RobovacCommand
     ) -> dict[str, str] | None:
